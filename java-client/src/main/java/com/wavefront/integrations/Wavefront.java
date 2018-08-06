@@ -1,13 +1,16 @@
 package com.wavefront.integrations;
 
+import com.wavefront.common.HistogramGranularity;
+import com.wavefront.common.Pair;
+import com.wavefront.common.WavefrontDataFormat;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.nio.charset.Charset;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 import javax.net.SocketFactory;
@@ -19,13 +22,11 @@ import javax.net.SocketFactory;
  * @author Clement Pang (clement@wavefront.com).
  * @author Conor Beverland (conor@wavefront.com).
  */
-public class Wavefront extends AbstractProxyConnectionHandler implements WavefrontSender {
+public class Wavefront implements WavefrontSender {
 
-  private static final Pattern WHITESPACE = Pattern.compile("[\\s]+");
-  // this may be optimistic about Carbon/Wavefront
-  private static final Charset UTF_8 = Charset.forName("UTF-8");
+  private final ProxyConnectionHandler metricsProxyConnectionHandler;
+  private final ProxyConnectionHandler distributionProxyConnectionHandler;
 
-  private AtomicInteger failures = new AtomicInteger();
   /**
    * Source to use if there's none.
    */
@@ -36,42 +37,64 @@ public class Wavefront extends AbstractProxyConnectionHandler implements Wavefro
    * {@link SocketFactory}.
    *
    * @param agentHostName The hostname of the Wavefront Proxy Agent
-   * @param port          The port of the Wavefront Proxy Agent
+   * @param metricsPort   The port of the Wavefront Proxy Agent that receives metrics
    */
-  public Wavefront(String agentHostName, int port) {
-    this(agentHostName, port, SocketFactory.getDefault());
-  }
-
-  /**
-   * Creates a new client which connects to the given address and socket factory.
-   *
-   * @param agentHostName The hostname of the Wavefront Proxy Agent
-   * @param port          The port of the Wavefront Proxy Agent
-   * @param socketFactory the socket factory
-   */
-  public Wavefront(String agentHostName, int port, SocketFactory socketFactory) {
-    this(new InetSocketAddress(agentHostName, port), socketFactory);
+  public Wavefront(String agentHostName, int metricsPort) {
+    this(agentHostName, metricsPort, null, SocketFactory.getDefault());
   }
 
   /**
    * Creates a new client which connects to the given address using the default
    * {@link SocketFactory}.
    *
-   * @param agentAddress the address of the Wavefront Proxy Agent
+   * @param agentHostName     The hostname of the Wavefront Proxy Agent
+   * @param metricsPort       The port of the Wavefront Proxy Agent that receives metrics
+   * @param distributionPort  The port of the Wavefront Proxy Agent that receives histogram distributions
    */
-  public Wavefront(InetSocketAddress agentAddress) {
-    this(agentAddress, SocketFactory.getDefault());
+  public Wavefront(String agentHostName, int metricsPort, @Nullable Integer distributionPort) {
+    this(agentHostName, metricsPort, distributionPort, SocketFactory.getDefault());
+  }
+
+  /**
+   * Creates a new client which connects to the given address and socket factory.
+   *
+   * @param agentHostName     The hostname of the Wavefront Proxy Agent
+   * @param metricsPort       The port of the Wavefront Proxy Agent that receives metrics
+   * @param distributionPort  The port of the Wavefront Proxy Agent that receives histogram distributions
+   * @param socketFactory     The socket factory
+   */
+  public Wavefront(String agentHostName, int metricsPort, @Nullable Integer distributionPort, SocketFactory socketFactory) {
+    this(new InetSocketAddress(agentHostName, metricsPort),
+        distributionPort != null ? new InetSocketAddress(agentHostName, distributionPort) : null,
+        socketFactory);
+  }
+
+  /**
+   * Creates a new client which connects to the given address using the default
+   * {@link SocketFactory}.
+   *
+   * @param metricsAgentAddress       The address of the Wavefront Proxy Agent that receives metrics
+   * @param distributionAgentAddress  The address of the Wavefront Proxy Agent that receives histogram distributions
+   */
+  public Wavefront(InetSocketAddress metricsAgentAddress, @Nullable InetSocketAddress distributionAgentAddress) {
+    metricsProxyConnectionHandler = new ProxyConnectionHandler(metricsAgentAddress, SocketFactory.getDefault());
+    distributionProxyConnectionHandler = distributionAgentAddress != null ? new ProxyConnectionHandler
+        (distributionAgentAddress, SocketFactory.getDefault()) : null;
   }
 
   /**
    * Creates a new client which connects to the given address and socket factory using the given
    * character set.
    *
-   * @param agentAddress  the address of the Wavefront Proxy Agent
-   * @param socketFactory the socket factory
+   * @param metricsAgentAddress       The address of the Wavefront Proxy Agent that receives metrics
+   * @param distributionAgentAddress  The address of the Wavefront Proxy Agent that receives histogram distributions
+   * @param socketFactory             The socket factory
    */
-  public Wavefront(InetSocketAddress agentAddress, SocketFactory socketFactory) {
-    super(agentAddress, socketFactory);
+  public Wavefront(InetSocketAddress metricsAgentAddress, @Nullable InetSocketAddress distributionAgentAddress,
+                   SocketFactory socketFactory) {
+    metricsProxyConnectionHandler = new ProxyConnectionHandler(metricsAgentAddress, socketFactory);
+    distributionProxyConnectionHandler = distributionAgentAddress != null ? new ProxyConnectionHandler
+        (distributionAgentAddress, socketFactory) : null;
   }
 
   private void initializeSource() throws UnknownHostException {
@@ -109,82 +132,130 @@ public class Wavefront extends AbstractProxyConnectionHandler implements Wavefro
     internalSend(name, value, timestamp, source, pointTags);
   }
 
+  @Override
+  public void send(Set<HistogramGranularity> histogramGranularities, List<Pair<Double, Integer>> centroids, String name)
+      throws IOException {
+    internalSend(histogramGranularities, null, centroids, name, source, null);
+  }
+
+  @Override
+  public void send(Set<HistogramGranularity> histogramGranularities, @Nullable Long timestamp,
+                   List<Pair<Double, Integer>> centroids, String name) throws IOException {
+    internalSend(histogramGranularities, timestamp, centroids, name, source, null);
+  }
+
+  @Override
+  public void send(Set<HistogramGranularity> histogramGranularities, @Nullable Long timestamp,
+                   List<Pair<Double, Integer>>
+                       centroids, String name, String source) throws IOException {
+    internalSend(histogramGranularities, timestamp, centroids, name, source, null);
+  }
+
+  @Override
+  public void send(Set<HistogramGranularity> histogramGranularities,
+                   List<Pair<Double, Integer>> centroids, String name, String source,
+                   @Nullable Map<String, String> pointTags) throws IOException {
+    internalSend(histogramGranularities, null, centroids, name, source, pointTags);
+  }
+
+  @Override
+  public void send(Set<HistogramGranularity> histogramGranularities, @Nullable Long timestamp,
+                   List<Pair<Double, Integer>> centroids, String name, String source,
+                   @Nullable Map<String, String> pointTags) throws IOException {
+    internalSend(histogramGranularities, timestamp, centroids, name, source, pointTags);
+  }
+
   private void internalSend(String name, double value, @Nullable Long timestamp, String source,
                             @Nullable Map<String, String> pointTags) throws IOException {
-    if (!isConnected()) {
+    if (!metricsProxyConnectionHandler.isConnected()) {
       try {
-        connect();
+        metricsProxyConnectionHandler.connect();
       } catch (IllegalStateException ex) {
         // already connected.
       }
     }
-    if (isBlank(name)) {
-      throw new IllegalArgumentException("metric name cannot be blank");
-    }
-    if (isBlank(source)) {
-      throw new IllegalArgumentException("source cannot be blank");
-    }
-    final StringBuilder sb = new StringBuilder();
+    String point = WavefrontDataFormat.pointToString(name, value, timestamp, source, pointTags, true);
     try {
-      sb.append(sanitize(name));
-      sb.append(' ');
-      sb.append(Double.toString(value));
-      if (timestamp != null) {
-        sb.append(' ');
-        sb.append(Long.toString(timestamp));
-      }
-      sb.append(" host=");
-      sb.append(sanitize(source));
-      if (pointTags != null) {
-        for (final Map.Entry<String, String> tag : pointTags.entrySet()) {
-          if (isBlank(tag.getKey())) {
-            throw new IllegalArgumentException("point tag key cannot be blank");
-          }
-          if (isBlank(tag.getValue())) {
-            throw new IllegalArgumentException("point tag value cannot be blank");
-          }
-          sb.append(' ');
-          sb.append(sanitize(tag.getKey()));
-          sb.append('=');
-          sb.append(sanitize(tag.getValue()));
-        }
-      }
-      sb.append('\n');
       try {
-        sendData(sb.toString());
+        metricsProxyConnectionHandler.sendData(point);
       } catch (Exception e) {
         throw new IOException(e);
       }
     } catch (IOException e) {
-      failures.incrementAndGet();
+      metricsProxyConnectionHandler.incrementAndGetFailureCount();
       throw e;
     }
   }
 
-  @Override
-  public int getFailureCount() {
-    return failures.get();
-  }
-
-  static String sanitize(String s) {
-    final String whitespaceSanitized = WHITESPACE.matcher(s).replaceAll("-");
-    if (s.contains("\"") || s.contains("'")) {
-      // for single quotes, once we are double-quoted, single quotes can exist happily inside it.
-      return "\"" + whitespaceSanitized.replaceAll("\"", "\\\\\"") + "\"";
-    } else {
-      return "\"" + whitespaceSanitized + "\"";
+  private void internalSend(Set<HistogramGranularity> histogramGranularities, @Nullable Long timestamp,
+                            List<Pair<Double, Integer>> centroids, String name, String source,
+                            @Nullable Map<String, String> pointTags) throws IOException {
+    if (!canHandleDistributions()) {
+      return; // don't send if there's no connection to distribution port
     }
-  }
-
-  private static boolean isBlank(String s) {
-    if (s == null || s.isEmpty()) {
-      return true;
+    if (centroids == null || centroids.isEmpty()) {
+      return; // don't send if distribution is empty
     }
-    for (int i = 0; i < s.length(); i++) {
-      if (!Character.isWhitespace(s.charAt(i))) {
-        return false;
+    if (!distributionProxyConnectionHandler.isConnected()) {
+      try {
+        distributionProxyConnectionHandler.connect();
+      } catch (IllegalStateException ex) {
+        // already connected.
       }
     }
-    return true;
+    List<String> histograms = WavefrontDataFormat.histogramToStrings(histogramGranularities, timestamp, centroids,
+        name, source, pointTags, true);
+    for (String histogram : histograms) {
+      try {
+        try {
+          distributionProxyConnectionHandler.sendData(histogram);
+        } catch (Exception e) {
+          throw new IOException(e);
+        }
+      } catch (IOException e) {
+        distributionProxyConnectionHandler.incrementAndGetFailureCount();
+        throw e;
+      }
+    }
+  }
+
+  @Override
+  public void connect() throws IllegalStateException, IOException {
+    metricsProxyConnectionHandler.connect();
+    if (canHandleDistributions()) {
+      distributionProxyConnectionHandler.connect();
+    }
+  }
+
+  @Override
+  public void flush() throws IOException {
+    metricsProxyConnectionHandler.flush();
+    if (canHandleDistributions()) {
+      distributionProxyConnectionHandler.flush();
+    }
+  }
+
+  @Override
+  public boolean isConnected() {
+    return metricsProxyConnectionHandler.isConnected() && (!canHandleDistributions() ||
+        distributionProxyConnectionHandler.isConnected());
+  }
+
+  @Override
+  public int getFailureCount() {
+    return metricsProxyConnectionHandler.getFailureCount() + (canHandleDistributions() ?
+        distributionProxyConnectionHandler.getFailureCount() : 0);
+  }
+
+  @Override
+  public void close() throws IOException {
+    metricsProxyConnectionHandler.close();
+    if (canHandleDistributions()) {
+      distributionProxyConnectionHandler.close();
+    }
+  }
+
+  public boolean canHandleDistributions() {
+    return distributionProxyConnectionHandler != null;
   }
 }

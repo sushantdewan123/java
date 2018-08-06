@@ -2,7 +2,8 @@ package com.wavefront.integrations;
 
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for {@link Wavefront}
@@ -12,11 +13,11 @@ import static org.junit.Assert.assertEquals;
 public class WavefrontTest {
 
   @Test
-  public void testSanitize() {
-    assertEquals("\"hello\"", Wavefront.sanitize("hello"));
-    assertEquals("\"hello-world\"", Wavefront.sanitize("hello world"));
-    assertEquals("\"hello.world\"", Wavefront.sanitize("hello.world"));
-    assertEquals("\"hello\\\"world\\\"\"", Wavefront.sanitize("hello\"world\""));
-    assertEquals("\"hello'world\"", Wavefront.sanitize("hello'world"));
+  public void testCanHandleDistributions() {
+    WavefrontSender metricsOnlySender = new Wavefront("localhost", 2878);
+    assertFalse(((Wavefront) metricsOnlySender).canHandleDistributions());
+
+    WavefrontSender sender = new Wavefront("localhost", 2878, 40000);
+    assertTrue(((Wavefront) sender).canHandleDistributions());
   }
 }

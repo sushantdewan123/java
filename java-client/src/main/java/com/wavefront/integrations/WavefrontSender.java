@@ -1,9 +1,14 @@
 package com.wavefront.integrations;
 
+import com.wavefront.common.HistogramGranularity;
+import com.wavefront.common.Pair;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.UnknownHostException;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -75,5 +80,92 @@ public interface WavefrontSender extends WavefrontConnectionHandler, Closeable {
    * @throws IOException if there was an error sending the metric.
    */
   void send(String name, double value, @Nullable Long timestamp, String source,
+            @Nullable Map<String, String> pointTags) throws IOException;
+
+
+  /**
+   * Send a histogram distribution to Wavefront. The current machine's hostname would be used as the source.
+   * The distribution will be timestamped at the agent.
+   *
+   * @param histogramGranularities  The set of intervals (minute, hour, and/or day) by which histogram data should be
+   *                                aggregated, of type {@link HistogramGranularity}.
+   * @param centroids               The distribution of histogram points to be sent. Each centroid is a {@link Pair}
+   *                                that holds the value of the centroid (as a Double) and the number of points
+   *                                (as an Integer).
+   * @param name                    The name of the histogram. Spaces are replaced with '-' (dashes) and quotes
+   *                                will be automatically escaped.
+   * @throws IOException if there was an error sending the distribution.
+   */
+  void send(Set<HistogramGranularity> histogramGranularities, List<Pair<Double, Integer>> centroids, String name)
+      throws IOException;
+
+  /**
+   * Send a histogram distribution to Wavefront. The current machine's hostname would be used as the source.
+   *
+   * @param histogramGranularities  The set of intervals (minute, hour, and/or day) by which histogram data should be
+   *                                aggregated, of type {@link HistogramGranularity}.
+   * @param timestamp               The timestamp in seconds since the epoch to be sent. Null to use agent assigned timestamp.
+   * @param centroids               The distribution of histogram points to be sent. Each centroid is a {@link Pair}
+   *                                that holds the value of the centroid (as a Double) and the number of points
+   *                                (as an Integer).
+   * @param name                    The name of the histogram. Spaces are replaced with '-' (dashes) and quotes
+   *                                will be automatically escaped.
+   * @throws IOException if there was an error sending the distribution.
+   */
+  void send(Set<HistogramGranularity> histogramGranularities, @Nullable Long timestamp,
+            List<Pair<Double, Integer>> centroids, String name) throws IOException;
+
+  /**
+   * Send a histogram distribution to Wavefront.
+   *
+   * @param histogramGranularities  The set of intervals (minute, hour, and/or day) by which histogram data should be
+   *                                aggregated, of type {@link HistogramGranularity}.
+   * @param timestamp               The timestamp in seconds since the epoch to be sent. Null to use agent assigned timestamp.
+   * @param centroids               The distribution of histogram points to be sent. Each centroid is a {@link Pair}
+   *                                that holds the value of the centroid (as a Double) and the number of points
+   *                                (as an Integer).
+   * @param name                    The name of the histogram. Spaces are replaced with '-' (dashes) and quotes
+   *                                will be automatically escaped.
+   * @param source                  The source (or host) that's sending the histogram. Null to use machine hostname.
+   * @throws IOException if there was an error sending the distribution.
+   */
+  void send(Set<HistogramGranularity> histogramGranularities, @Nullable Long timestamp,
+            List<Pair<Double, Integer>> centroids, String name, String source) throws IOException;
+
+  /**
+   * Send a histogram distribution to Wavefront. The distribution will be timestamped at the agent.
+   *
+   * @param histogramGranularities  The set of intervals (minute, hour, and/or day) by which histogram data should be
+   *                                aggregated, of type {@link HistogramGranularity}.
+   * @param centroids               The distribution of histogram points to be sent. Each centroid is a {@link Pair}
+   *                                that holds the value of the centroid (as a Double) and the number of points
+   *                                (as an Integer).
+   * @param name                    The name of the histogram. Spaces are replaced with '-' (dashes) and quotes
+   *                                will be automatically escaped.
+   * @param source                  The source (or host) that's sending the histogram. Null to use machine hostname.
+   * @param pointTags               The point tags associated with this histogram.
+   * @throws IOException if there was an error sending the distribution.
+   */
+  void send(Set<HistogramGranularity> histogramGranularities,
+            List<Pair<Double, Integer>> centroids, String name, String source,
+            @Nullable Map<String, String> pointTags) throws IOException;
+
+  /**
+   * Send a histogram distribution to Wavefront.
+   *
+   * @param histogramGranularities  The set of intervals (minute, hour, and/or day) by which histogram data should be
+   *                                aggregated, of type {@link HistogramGranularity}.
+   * @param timestamp               The timestamp in seconds since the epoch to be sent. Null to use agent assigned timestamp.
+   * @param centroids               The distribution of histogram points to be sent. Each centroid is a {@link Pair}
+   *                                that holds the value of the centroid (as a Double) and the number of points
+   *                                (as an Integer).
+   * @param name                    The name of the histogram. Spaces are replaced with '-' (dashes) and quotes
+   *                                will be automatically escaped.
+   * @param source                  The source (or host) that's sending the histogram. Null to use machine hostname.
+   * @param pointTags               The point tags associated with this histogram.
+   * @throws IOException if there was an error sending the distribution.
+   */
+  void send(Set<HistogramGranularity> histogramGranularities, @Nullable Long timestamp,
+            List<Pair<Double, Integer>> centroids, String name, String source,
             @Nullable Map<String, String> pointTags) throws IOException;
 }
