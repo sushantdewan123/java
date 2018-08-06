@@ -76,4 +76,8 @@ public interface WavefrontSender extends WavefrontConnectionHandler, Closeable {
    */
   void send(String name, double value, @Nullable Long timestamp, String source,
             @Nullable Map<String, String> pointTags) throws IOException;
+
+  /**
+   * TODO: histograms
+   */
 }
