@@ -26,4 +26,26 @@ public class DeltaCounter extends Counter {
     registry.register(metricName, counter);
     return counter;
   }
+
+  @VisibleForTesting
+  public static synchronized DeltaCounter get(MetricRegistry registry, MetricName metricName) {
+
+    if (registry == null || metricName == null || metricName.getKey().isEmpty()) {
+      throw new IllegalArgumentException("Invalid arguments");
+    }
+
+    if (!(metricName.getKey().startsWith(MetricConstants.DELTA_PREFIX) ||
+        metricName.getKey().startsWith(MetricConstants.DELTA_PREFIX_2))) {
+      metricName = new MetricName(MetricConstants.DELTA_PREFIX + metricName.getKey(),
+          metricName.getTags());
+    }
+    DeltaCounter counter = new DeltaCounter();
+    try {
+      return registry.register(metricName, counter);
+    } catch(IllegalArgumentException e) {
+      // UGLY !!!
+      // ignore
+      return counter;
+    }
+  }
 }
