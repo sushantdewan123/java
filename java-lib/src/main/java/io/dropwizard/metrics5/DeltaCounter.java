@@ -13,21 +13,6 @@ import com.wavefront.common.MetricConstants;
 public class DeltaCounter extends Counter {
 
   @VisibleForTesting
-  public static synchronized DeltaCounter get(MetricRegistry registry, String metricName) {
-
-    if (registry == null || metricName == null || metricName.isEmpty()) {
-      throw new IllegalArgumentException("Invalid arguments");
-    }
-
-    if (!(metricName.startsWith(MetricConstants.DELTA_PREFIX) || metricName.startsWith(MetricConstants.DELTA_PREFIX_2))) {
-      metricName = MetricConstants.DELTA_PREFIX + metricName;
-    }
-    DeltaCounter counter = new DeltaCounter();
-    registry.register(metricName, counter);
-    return counter;
-  }
-
-  @VisibleForTesting
   public static synchronized DeltaCounter get(MetricRegistry registry, MetricName metricName) {
 
     if (registry == null || metricName == null || metricName.getKey().isEmpty()) {
@@ -43,9 +28,12 @@ public class DeltaCounter extends Counter {
     try {
       return registry.register(metricName, counter);
     } catch(IllegalArgumentException e) {
-      // UGLY !!!
-      // ignore
-      return counter;
+      Counter existing = registry.counter(metricName);
+      if (existing instanceof DeltaCounter) {
+        return (DeltaCounter) existing;
+      } else {
+        throw new IllegalStateException("Found existing non-DeltaCounter: " + existing);
+      }
     }
   }
 }

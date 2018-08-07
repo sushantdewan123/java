@@ -65,7 +65,12 @@ public class WavefrontHistogram extends Histogram implements Metric {
     try {
       return registry.register(metricName, tDigestHistogram);
     } catch(IllegalArgumentException e) {
-      return tDigestHistogram;
+      Histogram existing = registry.histogram(metricName);
+      if (existing instanceof WavefrontHistogram) {
+        return (WavefrontHistogram) existing;
+      } else {
+        throw new IllegalStateException("Found non-WavefrontHistogram: " + existing);
+      }
     }
   }
 
