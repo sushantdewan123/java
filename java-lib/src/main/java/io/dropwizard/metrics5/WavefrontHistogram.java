@@ -62,7 +62,11 @@ public class WavefrontHistogram extends Histogram implements Metric {
     TDigestReservoir reservoir = new TDigestReservoir();
     WavefrontHistogram tDigestHistogram = new WavefrontHistogram(reservoir, clock);
     reservoir.set(tDigestHistogram);
-    return registry.register(metricName, tDigestHistogram);
+    try {
+      return registry.register(metricName, tDigestHistogram);
+    } catch(IllegalArgumentException e) {
+      return tDigestHistogram;
+    }
   }
 
   /**
